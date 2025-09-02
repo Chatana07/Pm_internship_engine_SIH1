@@ -287,53 +287,88 @@ async function getAIRecommendations(formData) {
 
 // Function to display recommendations
 function displayRecommendations(result) {
-  // Create a modal or new page to display results
-  const recommendationsHTML = `
-    <div class="recommendations-modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2><i class="fas fa-robot"></i> AI Recommendations</h2>
-          <button class="close-btn">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="user-profile-summary">
-            <h3>Your Profile Summary</h3>
-            <p><strong>Name:</strong> ${result.user_profile.name}</p>
-            <p><strong>Education:</strong> ${result.user_profile.education}</p>
-            <p><strong>Skills:</strong> ${result.user_profile.skills}</p>
-            <p><strong>Preferred Domain:</strong> ${result.user_profile.preferred_domain}</p>
-            <p><strong>Preferred Location:</strong> ${result.user_profile.preferred_location}</p>
+  // Check if there are any recommendations
+  if (result.total_recommendations === 0) {
+    // Show message when no recommendations are found
+    const noResultsHTML = `
+      <div class="recommendations-modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2><i class="fas fa-robot"></i> AI Recommendations</h2>
+            <button class="close-btn">&times;</button>
           </div>
-          
-          <div class="recommendations-list">
-            <h3>Top 3 Internship Recommendations</h3>
-            ${result.recommendations.map((rec, index) => `
-              <div class="recommendation-card">
-                <div class="card-header">
-                  <h4>${index + 1}. ${rec.company} - ${rec.role}</h4>
-                  <span class="similarity-score">Score: ${(rec.similarity_score * 100).toFixed(1)}%</span>
-                </div>
-                <div class="card-body">
-                  <p><strong>Domain:</strong> ${rec.domain}</p>
-                  <p><strong>Location:</strong> ${rec.location}</p>
-                  <p><strong>Type:</strong> ${rec.type}</p>
-                  <p><strong>Duration:</strong> ${rec.duration}</p>
-                  <p><strong>Stipend:</strong> ${rec.stipend}</p>
-                  <p><strong>Why Recommended:</strong> ${rec.reason}</p>
-                </div>
+          <div class="modal-body">
+            <div class="no-results-message">
+              <h3><i class="fas fa-exclamation-circle"></i> No Internships Found</h3>
+              <p>${result.message || 'No internships found matching your criteria. Please try adjusting your preferences.'}</p>
+              <div class="user-profile-summary">
+                <h4>Your Profile Summary</h4>
+                <p><strong>Name:</strong> ${result.user_profile.name}</p>
+                <p><strong>Education:</strong> ${result.user_profile.education}</p>
+                <p><strong>Skills:</strong> ${result.user_profile.skills}</p>
+                <p><strong>Preferred Domain:</strong> ${result.user_profile.preferred_domain}</p>
+                <p><strong>Preferred Location:</strong> ${result.user_profile.preferred_location}</p>
               </div>
-            `).join('')}
+            </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn primary close-modal-btn">Close</button>
+          <div class="modal-footer">
+            <button class="btn primary close-modal-btn">Close</button>
+          </div>
         </div>
       </div>
-    </div>
-  `;
-  
-  // Add modal to page
-  document.body.insertAdjacentHTML('beforeend', recommendationsHTML);
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', noResultsHTML);
+  } else {
+    // Create a modal to display results
+    const recommendationsHTML = `
+      <div class="recommendations-modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2><i class="fas fa-robot"></i> AI Recommendations</h2>
+            <button class="close-btn">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="user-profile-summary">
+              <h3>Your Profile Summary</h3>
+              <p><strong>Name:</strong> ${result.user_profile.name}</p>
+              <p><strong>Education:</strong> ${result.user_profile.education}</p>
+              <p><strong>Skills:</strong> ${result.user_profile.skills}</p>
+              <p><strong>Preferred Domain:</strong> ${result.user_profile.preferred_domain}</p>
+              <p><strong>Preferred Location:</strong> ${result.user_profile.preferred_location}</p>
+            </div>
+            
+            <div class="recommendations-list">
+              <h3>${result.message || `Top ${result.total_recommendations} Internship Recommendation${result.total_recommendations !== 1 ? 's' : ''}`}</h3>
+              ${result.recommendations.map((rec, index) => `
+                <div class="recommendation-card">
+                  <div class="card-header">
+                    <h4>${index + 1}. ${rec.company} - ${rec.role}</h4>
+                    <span class="similarity-score">Score: ${(rec.similarity_score * 100).toFixed(1)}%</span>
+                  </div>
+                  <div class="card-body">
+                    <p><strong>Domain:</strong> ${rec.domain}</p>
+                    <p><strong>Location:</strong> ${rec.location}</p>
+                    <p><strong>Type:</strong> ${rec.type}</p>
+                    <p><strong>Duration:</strong> ${rec.duration}</p>
+                    <p><strong>Stipend:</strong> ${rec.stipend}</p>
+                    <p><strong>Why Recommended:</strong> ${rec.reason}</p>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn primary close-modal-btn">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', recommendationsHTML);
+  }
   
   // Add event listeners for closing modal
   document.querySelector('.close-btn').addEventListener('click', closeModal);
@@ -348,12 +383,6 @@ function displayRecommendations(result) {
   
   // Show modal
   document.querySelector('.recommendations-modal').style.display = 'block';
-  
-  // Ensure modal content is visible
-  const modalContent = document.querySelector('.modal-content');
-  if (modalContent) {
-    modalContent.style.backgroundColor = '#ffffff';
-  }
 }
 
 // Function to close modal
@@ -464,7 +493,7 @@ document.head.insertAdjacentHTML('beforeend', `
       color: #333333; /* Dark text */
     }
     
-    .user-profile-summary h3 {
+    .user-profile-summary h3, .user-profile-summary h4 {
       margin-top: 0;
       color: #1976d2;
     }
@@ -549,6 +578,27 @@ document.head.insertAdjacentHTML('beforeend', `
     .recommendations-modal h3, 
     .recommendations-modal h4 {
       color: #1976d2;
+    }
+    
+    /* No results message */
+    .no-results-message {
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .no-results-message h3 {
+      color: #1976d2;
+      margin-bottom: 15px;
+    }
+    
+    .no-results-message p {
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+    }
+    
+    .no-results-message .user-profile-summary {
+      text-align: left;
+      margin-top: 20px;
     }
   </style>
 `);

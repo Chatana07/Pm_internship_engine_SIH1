@@ -278,11 +278,22 @@ def get_ai_recommendations():
         # Get recommendations directly from ML model without modifying dataset files
         recommendations = ml_matcher.get_recommendations_for_profile(user_profile, 3)
         
+        # Handle case where no recommendations are found
+        if not recommendations:
+            return jsonify({
+                'user_profile': user_profile,
+                'recommendations': [],
+                'total_recommendations': 0,
+                'model_type': 'ml-based',
+                'message': 'No internships found matching your criteria. Please try adjusting your preferences.'
+            })
+        
         return jsonify({
             'user_profile': user_profile,
             'recommendations': recommendations,
             'total_recommendations': len(recommendations),
-            'model_type': 'ml-based'
+            'model_type': 'ml-based',
+            'message': f'Found {len(recommendations)} internship{"s" if len(recommendations) != 1 else ""} matching your criteria.'
         })
         
     except Exception as e:

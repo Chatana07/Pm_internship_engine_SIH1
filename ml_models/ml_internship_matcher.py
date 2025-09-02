@@ -1,8 +1,3 @@
-"""
-ML-based Internship Matcher
-Uses machine learning to improve internship recommendations
-"""
-
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -250,13 +245,41 @@ class MLInternshipMatcher:
         if not self.model:
             raise ValueError("Model not trained yet. Call train_model() first.")
         
+        # Get preferred domain and location from user profile
+        preferred_domain = user_profile.get('preferred_domain', '')
+        preferred_location = user_profile.get('preferred_location', '')
+        
         # Create a temporary user row based on the profile
         temp_user_data = {
             'UserID': 99999,  # Temporary ID
             'Education': user_profile.get('education', ''),
             'Skills': user_profile.get('skills', ''),
-            'PreferredDomain': user_profile.get('preferred_domain', ''),
-            'PreferredLocation': user_profile.get('preferred_location', ''),
+            'PreferredDomain': preferred_domain,
+            'PreferredLocation': preferred_location,
+            'InternshipDuration': user_profile.get('internship_duration', '').replace(' Months', ' months'),
+            'EnrollmentStatus': user_profile.get('enrollment_status', 'Remote/Online')
+        }
+        
+        # First, get domain-matched internships (at least 1)
+        domain_matched_internships = []
+        if preferred_domain:
+            domain_filtered = self.model['internship_features'][
+                self.model['internship_features']['Domain'] == preferred_domain
+            ]
+            domain_matched_internships = domain_filtered.copy()
+        
+        # Check if we have domain-matched internships
+        if preferred_domain and len(domain_matched_internships) == 0:
+            # No internships in preferred domain, return empty recommendations
+            return []
+        
+        # Create a temporary user row based on the profile
+        temp_user_data = {
+            'UserID': 99999,  # Temporary ID
+            'Education': user_profile.get('education', ''),
+            'Skills': user_profile.get('skills', ''),
+            'PreferredDomain': preferred_domain,
+            'PreferredLocation': preferred_location,
             'InternshipDuration': user_profile.get('internship_duration', '').replace(' Months', ' months'),
             'EnrollmentStatus': user_profile.get('enrollment_status', 'Remote/Online')
         }
@@ -281,30 +304,176 @@ class MLInternshipMatcher:
         # Get the vector for our temporary user (last row)
         temp_user_vector = user_vectors[-1]
         
-        # Calculate similarities with all internships
-        similarities = cosine_similarity(temp_user_vector, self.model['internship_vectors']).flatten()
+        # Get all internships for skills-based matching
+        all_internships = self.model['internship_features'].copy()
         
-        # Get top K internships
-        top_indices = similarities.argsort()[-top_k:][::-1]
-        
-        recommendations = []
-        for idx in top_indices:
-            internship = self.model['internship_features'].iloc[idx]
-            similarity_score = similarities[idx]
+        # Filter by location if specified and not remote
+        if preferred_location and preferred_location.lower() != 'remote':
+            # Check if there are internships in the preferred location
+            location_filtered = all_internships[
+                (all_internships['Location'] == preferred_location) |
+                (all_internships['Location'].str.lower() == 'remote')
+            ]
             
-            recommendation = {
-                'internship_id': int(internship['InternshipID']),
-                'company': internship['Company'],
-                'role': internship['Role'],
-                'domain': internship['Domain'],
-                'location': internship['Location'],
-                'type': internship['Type'],
-                'duration': internship['Duration'],
-                'stipend': internship['Stipend'],
-                'similarity_score': float(similarity_score),
-                'reason': self._generate_reason(temp_user_data, internship, similarity_score)
-            }
-            recommendations.append(recommendation)
+            # If no internships in preferred location or remote, return empty
+            if len(location_filtered) == 0:
+                return []
+            
+            all_internships = location_filtered
+        
+        # Re-vectorize internships for skills-based matching
+        internship_texts = (
+            all_internships['Company'].fillna('') + ' ' +
+            all_internships['Role'].fillna('') + ' ' +
+            all_internships['Domain'].fillna('') + ' ' +
+            all_internships['Location'].fillna('')
+        )
+        filtered_internship_vectors = self.vectorizers['tfidf'].transform(internship_texts)
+        
+        # Calculate similarities with all internships
+        similarities = cosine_similarity(temp_user_vector, filtered_internship_vectors).flatten()
+        
+        # Create a dataframe with similarities for sorting
+        similarity_df = all_internships.copy()
+        similarity_df['similarity_score'] = similarities
+        
+        # Sort by similarity score (descending)
+        similarity_df = similarity_df.sort_values('similarity_score', ascending=False)
+        
+        # Get recommendations
+        recommendations = []
+        
+        # First recommendation should be from preferred domain if specified
+        if preferred_domain and len(domain_matched_internships) > 0:
+            # Filter domain-matched internships by location
+            if preferred_location and preferred_location.lower() != 'remote':
+                domain_location_filtered = domain_matched_internships[
+                    (domain_matched_internships['Location'] == preferred_location) |
+                    (domain_matched_internships['Location'].str.lower() == 'remote')
+                ]
+                
+                # If no internships in preferred location or remote, check if there are any domain matches
+                if len(domain_location_filtered) > 0:
+                    domain_matched_internships = domain_location_filtered
+                elif len(domain_matched_internships) == 0:
+                    # No internships available in preferred location or remote
+                    return []
+            elif preferred_location and preferred_location.lower() == 'remote':
+                # If user prefers remote, filter for remote internships
+                domain_location_filtered = domain_matched_internships[
+                    domain_matched_internships['Location'].str.lower() == 'remote'
+                ]
+                if len(domain_location_filtered) > 0:
+                    domain_matched_internships = domain_location_filtered
+            
+            # Re-vectorize domain-matched internships
+            if len(domain_matched_internships) > 0:
+                domain_texts = (
+                    domain_matched_internships['Company'].fillna('') + ' ' +
+                    domain_matched_internships['Role'].fillna('') + ' ' +
+                    domain_matched_internships['Domain'].fillna('') + ' ' +
+                    domain_matched_internships['Location'].fillna('')
+                )
+                domain_vectors = self.vectorizers['tfidf'].transform(domain_texts)
+                
+                # Calculate similarities with domain-matched internships
+                domain_similarities = cosine_similarity(temp_user_vector, domain_vectors).flatten()
+                
+                # Add similarity scores to domain-matched internships
+                domain_df = domain_matched_internships.copy()
+                domain_df['similarity_score'] = domain_similarities
+                
+                # Sort by similarity score
+                domain_df = domain_df.sort_values('similarity_score', ascending=False)
+                
+                # Add the best domain-matched internship as the first recommendation
+                if len(domain_df) > 0:
+                    best_domain_match = domain_df.iloc[0]
+                    recommendation = {
+                        'internship_id': int(best_domain_match['InternshipID']),
+                        'company': best_domain_match['Company'],
+                        'role': best_domain_match['Role'],
+                        'domain': best_domain_match['Domain'],
+                        'location': best_domain_match['Location'],
+                        'type': best_domain_match['Type'],
+                        'duration': best_domain_match['Duration'],
+                        'stipend': best_domain_match['Stipend'],
+                        'similarity_score': float(best_domain_match['similarity_score']),
+                        'reason': self._generate_reason(temp_user_data, best_domain_match, best_domain_match['similarity_score'])
+                    }
+                    recommendations.append(recommendation)
+        
+        # Add skills-based recommendations for remaining slots
+        remaining_slots = top_k - len(recommendations)
+        if remaining_slots > 0:
+            # Remove already recommended internships from similarity_df
+            recommended_ids = [rec['internship_id'] for rec in recommendations]
+            if recommended_ids:
+                similarity_df = similarity_df[~similarity_df['InternshipID'].isin(recommended_ids)]
+            
+            # Get top remaining recommendations based on skills matching
+            top_remaining = similarity_df.head(remaining_slots)
+            
+            for _, internship_row in top_remaining.iterrows():
+                recommendation = {
+                    'internship_id': int(internship_row['InternshipID']),
+                    'company': internship_row['Company'],
+                    'role': internship_row['Role'],
+                    'domain': internship_row['Domain'],
+                    'location': internship_row['Location'],
+                    'type': internship_row['Type'],
+                    'duration': internship_row['Duration'],
+                    'stipend': internship_row['Stipend'],
+                    'similarity_score': float(internship_row['similarity_score']),
+                    'reason': self._generate_reason(temp_user_data, internship_row, internship_row['similarity_score'])
+                }
+                recommendations.append(recommendation)
+        
+        # If we still don't have enough recommendations and have domain preferences
+        if len(recommendations) < top_k and preferred_domain and len(domain_matched_internships) > 0:
+            # Fill remaining slots with other domain-matched internships
+            remaining_slots = top_k - len(recommendations)
+            recommended_ids = [rec['internship_id'] for rec in recommendations]
+            
+            # Get domain-matched internships not yet recommended
+            available_domain_internships = domain_matched_internships[
+                ~domain_matched_internships['InternshipID'].isin(recommended_ids)
+            ]
+            
+            # Sort by InternshipID or other criteria to get consistent results
+            available_domain_internships = available_domain_internships.sort_values('InternshipID')
+            
+            # Add remaining domain-matched internships
+            for _, internship_row in available_domain_internships.head(remaining_slots).iterrows():
+                # Re-calculate similarity for this internship
+                internship_text = (
+                    str(internship_row['Company']).fillna('') + ' ' +
+                    str(internship_row['Role']).fillna('') + ' ' +
+                    str(internship_row['Domain']).fillna('') + ' ' +
+                    str(internship_row['Location']).fillna('')
+                )
+                internship_vector = self.vectorizers['tfidf'].transform([internship_text])
+                similarity = cosine_similarity(temp_user_vector, internship_vector)[0][0]
+                
+                recommendation = {
+                    'internship_id': int(internship_row['InternshipID']),
+                    'company': internship_row['Company'],
+                    'role': internship_row['Role'],
+                    'domain': internship_row['Domain'],
+                    'location': internship_row['Location'],
+                    'type': internship_row['Type'],
+                    'duration': internship_row['Duration'],
+                    'stipend': internship_row['Stipend'],
+                    'similarity_score': float(similarity),
+                    'reason': self._generate_reason(temp_user_data, internship_row, similarity)
+                }
+                recommendations.append(recommendation)
+                
+                if len(recommendations) >= top_k:
+                    break
+        
+        # Limit to top_k recommendations
+        recommendations = recommendations[:top_k]
         
         return recommendations
     
@@ -315,6 +484,8 @@ class MLInternshipMatcher:
         # Domain match
         if user_row['PreferredDomain'] == internship_row['Domain']:
             reasons.append(f"matches your preferred domain in {user_row['PreferredDomain']}")
+        else:
+            reasons.append(f"matches your skills and preferences")
         
         # Location match
         if user_row['PreferredLocation'] == internship_row['Location']:
