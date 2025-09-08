@@ -24,7 +24,13 @@ except ImportError as e:
 
 app = Flask(__name__)
 # Enable CORS for all routes with specific configuration
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://localhost", "http://127.0.0.1"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Initialize the matchers globally
 matcher = None
@@ -39,9 +45,9 @@ def initialize_matchers():
         # Get the root directory (parent of backend directory)
         root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
-        # Construct correct paths to dataset files
-        user_dataset_path = os.path.join(root_dir, 'dataset', 'user_profile_dataset_100.csv')
-        internship_dataset_path = os.path.join(root_dir, 'dataset', 'internship_dataset_50.csv')
+        # Construct correct paths to dataset files (using real-world dataset)
+        user_dataset_path = os.path.join(root_dir, 'dataset', 'Candidates_cleaned.csv')
+        internship_dataset_path = os.path.join(root_dir, 'dataset', 'Jobs_cleaned.csv')
         
         # Initialize rule-based matcher
         matcher = InternshipMatcher(
@@ -245,18 +251,33 @@ def get_ml_recommendations():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
-@app.route('/ai_recommend', methods=['POST'])
+@app.route('/ai_recommend', methods=['POST', 'OPTIONS'])
 def get_ai_recommendations():
     """Get AI recommendations based on form data from frontend."""
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'OK'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        return response
+    
+    # Handle POST request
     if not ml_model_loaded or not ml_matcher:
-        return jsonify({'error': 'ML model not available or not initialized'}), 500
+        response = jsonify({'error': 'ML model not available or not initialized'}), 500
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
     
     try:
         # Get form data from request
         data = request.get_json()
         
+        print(f"Received AI recommendation request with data: {data}")
+        
         if not data:
-            return jsonify({'error': 'No data provided in request body'}), 400
+            response = jsonify({'error': 'No data provided in request body'}), 400
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response
         
         # Extract form fields and map to user profile
         # Note: This is a simplified mapping based on the form fields
@@ -275,29 +296,44 @@ def get_ai_recommendations():
             'govt_job_family': data.get('govtJob', 'no')
         }
         
+        print(f"Processing AI recommendation for user profile: {user_profile}")
+        
         # Get recommendations directly from ML model without modifying dataset files
         recommendations = ml_matcher.get_recommendations_for_profile(user_profile, 3)
         
+        print(f"Generated recommendations: {recommendations}")
+        
         # Handle case where no recommendations are found
         if not recommendations:
-            return jsonify({
+            response_data = {
                 'user_profile': user_profile,
                 'recommendations': [],
                 'total_recommendations': 0,
                 'model_type': 'ml-based',
                 'message': 'No internships found matching your criteria. Please try adjusting your preferences.'
-            })
+            }
+            response = jsonify(response_data)
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response
         
-        return jsonify({
+        response_data = {
             'user_profile': user_profile,
             'recommendations': recommendations,
             'total_recommendations': len(recommendations),
             'model_type': 'ml-based',
             'message': f'Found {len(recommendations)} internship{"s" if len(recommendations) != 1 else ""} matching your criteria.'
-        })
+        }
+        
+        response = jsonify(response_data)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
         
     except Exception as e:
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        print(f"Error in AI recommendation endpoint: {e}")
+        traceback.print_exc()
+        error_response = jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        error_response[0].headers.add('Access-Control-Allow-Origin', '*')
+        return error_response
 
 
 def map_enrollment_status(form_value):

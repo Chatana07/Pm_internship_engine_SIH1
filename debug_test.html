@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+</head>
+<body>
+    <h1>Debug Test for AI Recommendations</h1>
+    <button id="testConnection">Test Connection to Backend</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('testConnection').addEventListener('click', async function() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Testing connection...</p>';
+            
+            try {
+                // Test if we can reach the backend
+                const healthResponse = await fetch('http://localhost:5000/health');
+                const healthData = await healthResponse.json();
+                console.log('Health check:', healthData);
+                
+                resultDiv.innerHTML += `<p>✅ Backend health check successful: ${JSON.stringify(healthData)}</p>`;
+                
+                // Test AI recommendation endpoint with sample data
+                const testData = {
+                    "name": "John Doe",
+                    "citizenship": "Indian",
+                    "age": 22,
+                    "eduMin": "BCA",
+                    "skills": "Python, SQL, Machine Learning",
+                    "domain": "Data Science",
+                    "location": "Remote",
+                    "duration": "12 Months",
+                    "edu": "Not in full-time",
+                    "income": "Up to ₹8,00,000",
+                    "aadhaarLink": "yes",
+                    "govtJob": "no"
+                };
+                
+                resultDiv.innerHTML += '<p>Sending test data to AI recommendation endpoint...</p>';
+                
+                const aiResponse = await fetch('http://localhost:5000/ai_recommend', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                console.log('AI response status:', aiResponse.status);
+                console.log('AI response headers:', [...aiResponse.headers.entries()]);
+                
+                if (aiResponse.ok) {
+                    const aiData = await aiResponse.json();
+                    console.log('AI response data:', aiData);
+                    resultDiv.innerHTML += `<p>✅ AI recommendation request successful!</p>`;
+                    resultDiv.innerHTML += `<pre>${JSON.stringify(aiData, null, 2)}</pre>`;
+                } else {
+                    const errorText = await aiResponse.text();
+                    console.error('AI response error:', errorText);
+                    resultDiv.innerHTML += `<p style="color: red;">❌ AI recommendation request failed with status ${aiResponse.status}: ${errorText}</p>`;
+                }
+                
+            } catch (error) {
+                console.error('Connection test error:', error);
+                resultDiv.innerHTML += `<p style="color: red;">❌ Connection test failed: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</body>
+</html>

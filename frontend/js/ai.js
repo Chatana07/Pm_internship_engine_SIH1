@@ -214,7 +214,16 @@ document.querySelector("form").addEventListener("submit", function(e) {
   
   requiredFields.forEach(field => {
     if (!field.value && !field.checked) {
-      allFilled = false;
+      // Special handling for radio buttons
+      if (field.type === 'radio') {
+        const radioGroup = document.querySelectorAll(`input[name="${field.name}"]`);
+        const isChecked = Array.from(radioGroup).some(radio => radio.checked);
+        if (!isChecked) {
+          allFilled = false;
+        }
+      } else {
+        allFilled = false;
+      }
     }
   });
   
@@ -225,19 +234,21 @@ document.querySelector("form").addEventListener("submit", function(e) {
   
   // Collect form data
   const formData = {
-    name: document.getElementById("name").value,
-    citizenship: document.getElementById("citizenship").value,
-    age: document.getElementById("age").value,
-    eduMin: document.getElementById("eduMin").value,
-    skills: document.getElementById("skills").value,
-    domain: document.getElementById("domain").value,
-    location: document.getElementById("location").value,
-    duration: document.getElementById("duration").value,
-    edu: document.querySelector('input[name="edu"]:checked').value,
-    income: document.getElementById("income").value,
-    aadhaarLink: document.querySelector('input[name="aadhaarLink"]:checked').value,
-    govtJob: document.querySelector('input[name="govtJob"]:checked').value
+    name: document.getElementById("name")?.value || "",
+    citizenship: document.getElementById("citizenship")?.value || "Indian",
+    age: document.getElementById("age")?.value ? parseInt(document.getElementById("age").value) : 0,
+    eduMin: document.getElementById("eduMin")?.value || "",
+    skills: document.getElementById("skills")?.value || "",
+    domain: document.getElementById("domain")?.value || "",
+    location: document.getElementById("location")?.value || "",
+    duration: document.getElementById("duration")?.value || "12 Months",
+    edu: document.querySelector('input[name="edu"]:checked')?.value || "Not in full-time",
+    income: document.getElementById("income")?.value || "Up to ₹8,00,000",
+    aadhaarLink: document.querySelector('input[name="aadhaarLink"]:checked')?.value || "no",
+    govtJob: document.querySelector('input[name="govtJob"]:checked')?.value || "no"
   };
+  
+  console.log("Form data being sent:", formData);
   
   // Send data to backend
   getAIRecommendations(formData);
@@ -246,6 +257,8 @@ document.querySelector("form").addEventListener("submit", function(e) {
 // Function to send data to backend and get AI recommendations
 async function getAIRecommendations(formData) {
   try {
+    console.log("Sending request to backend with data:", formData);
+    
     // Show loading state
     const submitBtn = document.querySelector(".submit-btn");
     const originalText = submitBtn.innerHTML;
@@ -261,11 +274,18 @@ async function getAIRecommendations(formData) {
       body: JSON.stringify(formData)
     });
     
+    console.log("Response received:", response);
+    console.log("Response status:", response.status);
+    console.log("Response headers:", [...response.headers.entries()]);
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error("Error response body:", errorText);
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
     }
     
     const result = await response.json();
+    console.log("Result received:", result);
     
     // Restore button state
     submitBtn.innerHTML = originalText;
@@ -276,12 +296,41 @@ async function getAIRecommendations(formData) {
     
   } catch (error) {
     console.error('Error getting AI recommendations:', error);
-    alert("Error getting AI recommendations. Please try again.");
+    
+    // More detailed error message
+    let errorMessage = "Error getting AI recommendations. Please try again.";
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      errorMessage = "Network error: Could not connect to the server. Please make sure the backend is running on http://localhost:5000";
+    } else if (error.message) {
+      errorMessage = `Error: ${error.message}`;
+    }
+    
+    // Show error in a more user-friendly way
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.innerHTML = `
+      <div style="background-color: #f8d7da; color: #721c24; padding: 15px; border: 1px solid #f5c6cb; border-radius: 4px; margin: 10px 0;">
+        <strong>Error:</strong> ${errorMessage}
+      </div>
+    `;
+    
+    // Add error message to the form
+    const form = document.querySelector('form');
+    form.insertBefore(errorDiv, form.firstChild);
+    
+    // Remove error message after 5 seconds
+    setTimeout(() => {
+      if (errorDiv.parentNode) {
+        errorDiv.parentNode.removeChild(errorDiv);
+      }
+    }, 5000);
     
     // Restore button state
     const submitBtn = document.querySelector(".submit-btn");
-    submitBtn.innerHTML = "<i class='fas fa-robot'></i> Get AI Recommendations";
-    submitBtn.disabled = false;
+    if (submitBtn) {
+      submitBtn.innerHTML = "<i class='fas fa-robot'></i> Get AI Recommendations";
+      submitBtn.disabled = false;
+    }
   }
 }
 
@@ -424,6 +473,16 @@ document.head.insertAdjacentHTML('beforeend', `
       box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
     }
     
+    /* Error message */
+    .error-message {
+      animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
     /* Recommendations Modal */
     .recommendations-modal {
       display: none;
@@ -433,7 +492,7 @@ document.head.insertAdjacentHTML('beforeend', `
       top: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.7); /* Darker background for better contrast */
+      background-color: rgba(0, 0, 0, 0.7);
       overflow: auto;
     }
     
@@ -481,8 +540,8 @@ document.head.insertAdjacentHTML('beforeend', `
     
     .modal-body {
       padding: 20px;
-      background-color: #ffffff; /* Ensure white background */
-      color: #333333; /* Dark text for better readability */
+      background-color: #ffffff;
+      color: #333333;
     }
     
     .user-profile-summary {
@@ -490,7 +549,7 @@ document.head.insertAdjacentHTML('beforeend', `
       padding: 15px;
       border-radius: 5px;
       margin-bottom: 20px;
-      color: #333333; /* Dark text */
+      color: #333333;
     }
     
     .user-profile-summary h3, .user-profile-summary h4 {
@@ -509,8 +568,8 @@ document.head.insertAdjacentHTML('beforeend', `
       border-radius: 5px;
       margin-bottom: 15px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      background-color: #ffffff; /* White background */
-      color: #333333; /* Dark text */
+      background-color: #ffffff;
+      color: #333333;
     }
     
     .card-header {
@@ -538,20 +597,20 @@ document.head.insertAdjacentHTML('beforeend', `
     
     .card-body {
       padding: 15px;
-      background-color: #ffffff; /* White background */
-      color: #333333; /* Dark text */
+      background-color: #ffffff;
+      color: #333333;
     }
     
     .card-body p {
       margin: 5px 0;
-      color: #333333; /* Ensure dark text */
+      color: #333333;
     }
     
     .modal-footer {
       padding: 20px;
       text-align: right;
       border-top: 1px solid #eee;
-      background-color: #ffffff; /* White background */
+      background-color: #ffffff;
     }
     
     .close-modal-btn {

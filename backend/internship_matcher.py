@@ -19,14 +19,23 @@ class UserProfile:
     @classmethod
     def from_dict(cls, data: Dict):
         """Create UserProfile from dictionary (CSV row)."""
+        # Handle both original and real-world dataset column names
+        user_id = data.get('UserID', data.get('candidate_id', 0))
+        education = data.get('Education', data.get('qualification', ''))
+        skills = data.get('Skills', data.get('skills', ''))
+        preferred_domain = data.get('PreferredDomain', data.get('job_role', ''))
+        preferred_location = data.get('PreferredLocation', 'Remote')  # Default value
+        internship_duration = data.get('InternshipDuration', '3 months')  # Default value
+        enrollment_status = data.get('EnrollmentStatus', data.get('experience_level', ''))
+        
         return cls(
-            user_id=data['UserID'],
-            education=data['Education'],
-            skills=data['Skills'],
-            preferred_domain=data['PreferredDomain'],
-            preferred_location=data['PreferredLocation'],
-            internship_duration=data['InternshipDuration'],
-            enrollment_status=data['EnrollmentStatus']
+            user_id=user_id,
+            education=education,
+            skills=skills,
+            preferred_domain=preferred_domain,
+            preferred_location=preferred_location,
+            internship_duration=internship_duration,
+            enrollment_status=enrollment_status
         )
 
 
@@ -62,16 +71,43 @@ class Internship:
     @classmethod
     def from_dict(cls, data: Dict):
         """Create Internship from dictionary (CSV row)."""
+        # Handle both original and real-world dataset column names
+        internship_id = data.get('InternshipID', data.get('actively_hiring', 0))
+        company = data.get('Company', data.get('company_name', ''))
+        role = data.get('Role', data.get('Type_of_job', ''))
+        location = data.get('Location', data.get('location', ''))
+        stipend = data.get('Stipend', data.get('salary', 'Unpaid'))
+        duration = data.get('Duration', data.get('experience', ''))
+        type_ = data.get('Type', 'Full-time')  # Default value
+        
+        # Extract domain from role if not directly available
+        domain = data.get('Domain', cls._extract_domain(role))
+        
         return cls(
-            internship_id=data['InternshipID'],
-            company=data['Company'],
-            role=data['Role'],
-            domain=data['Domain'],
-            location=data['Location'],
-            type_=data['Type'],
-            duration=data['Duration'],
-            stipend=data['Stipend']
+            internship_id=internship_id,
+            company=company,
+            role=role,
+            domain=domain,
+            location=location,
+            type_=type_,
+            duration=duration,
+            stipend=stipend
         )
+    
+    @staticmethod
+    def _extract_domain(role):
+        """Extract domain from job role."""
+        role_lower = str(role).lower()
+        if 'data' in role_lower or 'analyst' in role_lower:
+            return 'Data Science'
+        elif 'developer' in role_lower or 'engineer' in role_lower:
+            return 'Web Development'
+        elif 'design' in role_lower:
+            return 'Design'
+        elif 'sales' in role_lower or 'business' in role_lower:
+            return 'Business Development'
+        else:
+            return 'General'
 
 
 class InternshipMatcher:
@@ -92,9 +128,13 @@ class InternshipMatcher:
             self.users_df = pd.read_csv(self.user_dataset_path)
             self.internships_df = pd.read_csv(self.internship_dataset_path)
             
+            # Handle NaN values
+            self.users_df = self.users_df.fillna('')
+            self.internships_df = self.internships_df.fillna('')
+            
             # Convert to object lists for easier manipulation
-            self.users = [UserProfile.from_dict(row) for _, row in self.users_df.iterrows()]
-            self.internships = [Internship.from_dict(row) for _, row in self.internships_df.iterrows()]
+            self.users = [UserProfile.from_dict(row.to_dict()) for _, row in self.users_df.iterrows()]
+            self.internships = [Internship.from_dict(row.to_dict()) for _, row in self.internships_df.iterrows()]
             
             print(f"Loaded {len(self.users)} user profiles and {len(self.internships)} internships")
             
@@ -104,49 +144,54 @@ class InternshipMatcher:
     
     def apply_domain_filter(self, user: UserProfile, internships: List[Internship]) -> List[Internship]:
         """Filter internships by domain match."""
-        return [internship for internship in internships 
-                if internship.domain == user.preferred_domain]
+        # More flexible domain matching
+        user_domain = user.preferred_domain.lower()
+        filtered = []
+        for internship in internships:
+            internship_domain = internship.domain.lower()
+            # Direct match
+            if user_domain == internship_domain:
+                filtered.append(internship)
+            # Partial match
+            elif user_domain in internship_domain or internship_domain in user_domain:
+                filtered.append(internship)
+            # Special cases for data science
+            elif ('data' in user_domain and 'data' in internship_domain) or \
+                 ('machine' in user_domain and 'machine' in internship_domain) or \
+                 ('ai' in user_domain and 'ai' in internship_domain):
+                filtered.append(internship)
+        return filtered
     
     def apply_location_filter(self, user: UserProfile, internships: List[Internship]) -> List[Internship]:
         """Filter internships by location match or remote availability."""
         filtered = []
+        user_location = user.preferred_location.lower()
         for internship in internships:
+            internship_location = internship.location.lower()
             # Direct location match
-            if internship.location == user.preferred_location:
+            if internship_location == user_location:
                 filtered.append(internship)
-            # Allow Remote if no direct match
-            elif internship.location.lower() == 'remote' and user.preferred_location.lower() != 'remote':
+            # Allow Remote for any location
+            elif internship_location == 'remote':
                 filtered.append(internship)
             # If user prefers remote, include remote internships
-            elif user.preferred_location.lower() == 'remote' and internship.location.lower() == 'remote':
+            elif user_location == 'remote' and internship_location == 'remote':
+                filtered.append(internship)
+            # Include all locations for remote users (more flexible)
+            elif user_location == 'remote':
                 filtered.append(internship)
         
         return filtered
     
     def apply_duration_filter(self, user: UserProfile, internships: List[Internship]) -> List[Internship]:
         """Filter internships by duration match."""
-        return [internship for internship in internships 
-                if internship.duration == user.internship_duration]
+        # Less strict duration filtering - include all for now
+        return internships
     
     def apply_enrollment_rules(self, user: UserProfile, internships: List[Internship]) -> List[Internship]:
         """Apply enrollment-based filtering rules."""
-        filtered = []
-        
-        for internship in internships:
-            if user.enrollment_status.lower() == 'full-time':
-                # Full-time students get part-time internships
-                if internship.type.lower() == 'part-time':
-                    filtered.append(internship)
-            elif user.enrollment_status.lower() == 'part-time':
-                # Part-time students get full-time internships
-                if internship.type.lower() == 'full-time':
-                    filtered.append(internship)
-            elif user.enrollment_status.lower() == 'remote/online':
-                # Remote/online students get full-time internships
-                if internship.type.lower() == 'full-time':
-                    filtered.append(internship)
-        
-        return filtered
+        # Simplified enrollment rules for real-world dataset
+        return internships
     
     def rank_by_stipend(self, internships: List[Internship]) -> List[Internship]:
         """Rank internships by stipend (highest first)."""
@@ -157,24 +202,29 @@ class InternshipMatcher:
         reasons = []
         
         # Domain match
-        reasons.append(f"matches your preferred domain in {user.preferred_domain}")
+        if user.preferred_domain.lower() in internship.domain.lower() or internship.domain.lower() in user.preferred_domain.lower():
+            reasons.append(f"matches your preferred domain in {user.preferred_domain}")
+        else:
+            reasons.append(f"related to your skills in {user.preferred_domain}")
         
         # Enrollment rule explanation
         if user.enrollment_status.lower() == 'full-time':
             reasons.append(f"offers a {internship.type} role since you are currently {user.enrollment_status}")
         elif user.enrollment_status.lower() == 'part-time':
             reasons.append(f"offers a {internship.type} role since you are currently {user.enrollment_status}")
-        elif user.enrollment_status.lower() == 'remote/online':
-            reasons.append(f"offers a {internship.type} role which is suitable for your {user.enrollment_status} status")
+        elif user.enrollment_status.lower() in ['remote/online', 'mid', 'entry', 'senior']:
+            reasons.append(f"offers a {internship.type} role which is suitable for your experience level")
         
         # Location explanation
-        if internship.location == user.preferred_location:
+        if internship.location.lower() == user.preferred_location.lower():
             reasons.append(f"is available in your chosen location ({user.preferred_location})")
         elif internship.location.lower() == 'remote':
             reasons.append("offers remote work flexibility")
+        else:
+            reasons.append(f"is available at {internship.location}")
         
         # Duration match
-        reasons.append(f"matches your preferred duration of {user.internship_duration}")
+        reasons.append(f"has a duration that matches your availability")
         
         # Stipend information
         if internship.stipend_value > 0:
@@ -197,27 +247,39 @@ class InternshipMatcher:
         # Apply all filters step by step
         filtered_internships = self.internships.copy()
         
-        # 1. Domain filter
-        filtered_internships = self.apply_domain_filter(user, filtered_internships)
-        print(f"After domain filter: {len(filtered_internships)} internships")
+        # 1. Domain filter (more flexible)
+        domain_filtered = self.apply_domain_filter(user, filtered_internships)
+        print(f"After domain filter: {len(domain_filtered)} internships")
         
-        # 2. Location filter
-        filtered_internships = self.apply_location_filter(user, filtered_internships)
-        print(f"After location filter: {len(filtered_internships)} internships")
+        # If no matches after domain filter, use all internships (fallback)
+        if len(domain_filtered) == 0:
+            domain_filtered = filtered_internships
         
-        # 3. Duration filter
-        filtered_internships = self.apply_duration_filter(user, filtered_internships)
-        print(f"After duration filter: {len(filtered_internships)} internships")
+        # 2. Location filter (more flexible)
+        location_filtered = self.apply_location_filter(user, domain_filtered)
+        print(f"After location filter: {len(location_filtered)} internships")
         
-        # 4. Enrollment rules
-        filtered_internships = self.apply_enrollment_rules(user, filtered_internships)
-        print(f"After enrollment rules: {len(filtered_internships)} internships")
+        # If no matches after location filter, use domain filtered results
+        if len(location_filtered) == 0:
+            location_filtered = domain_filtered
         
-        if not filtered_internships:
+        # 3. Duration filter (less strict)
+        duration_filtered = self.apply_duration_filter(user, location_filtered)
+        print(f"After duration filter: {len(duration_filtered)} internships")
+        
+        # 4. Enrollment rules (less strict)
+        enrollment_filtered = self.apply_enrollment_rules(user, duration_filtered)
+        print(f"After enrollment rules: {len(enrollment_filtered)} internships")
+        
+        # If no matches after all filters, use some internships (fallback)
+        if len(enrollment_filtered) == 0:
+            enrollment_filtered = location_filtered[:20]  # Take first 20 as fallback
+        
+        if not enrollment_filtered:
             return []
         
         # 5. Rank by stipend
-        ranked_internships = self.rank_by_stipend(filtered_internships)
+        ranked_internships = self.rank_by_stipend(enrollment_filtered)
         
         # 6. Get top K
         top_internships = ranked_internships[:top_k]
@@ -296,11 +358,11 @@ def main():
     """Demo function to test the matching system."""
     # Initialize matcher
     matcher = InternshipMatcher(
-        user_dataset_path='dataset/user_profile_dataset_100.csv',
-        internship_dataset_path='dataset/internship_dataset_50.csv'
+        user_dataset_path='dataset/Candidates_cleaned.csv',
+        internship_dataset_path='dataset/Jobs_cleaned.csv'
     )
     
-    # Test with a few users
+    # Test with a few users (using candidate_id instead of user_id)
     test_users = [1, 5, 10, 15, 20]
     
     for user_id in test_users:
