@@ -257,12 +257,24 @@ class MLInternshipMatcher:
         domain_filtered = []
         for idx, internship in self.internships_df.iterrows():
             internship_domain = str(internship['Domain']).lower()
-            if user_domain == internship_domain or user_domain in internship_domain or internship_domain in user_domain:
+            # More strict domain matching to prevent overfitting
+            if user_domain == internship_domain:
                 domain_filtered.append(idx)
         
-        # If no domain matches, include all internships (fallback)
+        # If no exact domain matches, try partial matches but with a limit
         if not domain_filtered:
-            domain_filtered = list(range(len(self.internships_df)))
+            for idx, internship in self.internships_df.iterrows():
+                internship_domain = str(internship['Domain']).lower()
+                if user_domain in internship_domain or internship_domain in user_domain:
+                    domain_filtered.append(idx)
+                    # Limit to prevent too many irrelevant matches
+                    if len(domain_filtered) >= 100:
+                        break
+        
+        # If still no domain matches, return empty list to prevent overfitting
+        # This is the key fix - don't fallback to all internships
+        if not domain_filtered:
+            return []
         
         # Filter by location - prefer exact match or remote
         location_filtered = []
@@ -274,7 +286,7 @@ class MLInternshipMatcher:
             if user_location == internship_location or internship_location == 'remote' or user_location == 'remote':
                 location_filtered.append(idx)
         
-        # If no location matches, use domain filtered results
+        # If no location matches, use domain filtered results (but still better than all internships)
         if not location_filtered:
             location_filtered = domain_filtered
         
@@ -296,13 +308,9 @@ class MLInternshipMatcher:
         if not duration_filtered:
             duration_filtered = location_filtered
         
-        # If we have too few options, expand the filter
-        if len(duration_filtered) < 10:
-            duration_filtered = location_filtered
-        if len(duration_filtered) < 10:
-            duration_filtered = domain_filtered
-        if len(duration_filtered) < 10:
-            duration_filtered = list(range(len(self.internships_df)))
+        # Limit the number of internships to prevent overfitting
+        if len(duration_filtered) > 200:
+            duration_filtered = duration_filtered[:200]
         
         # Now calculate TF-IDF similarity only for filtered internships
         if self.tfidf_vectorizer is None:
@@ -354,6 +362,10 @@ class MLInternshipMatcher:
             user_idx = i
             shortlisted_internships = self._shortlist_internships(user_idx, top_n=20)
             
+            # Skip if no internships are shortlisted
+            if not shortlisted_internships:
+                continue
+                
             # Create positive examples (high similarity internships)
             user_similarities = cosine_similarity(
                 user_tfidf[user_idx:user_idx+1], 
@@ -510,8 +522,10 @@ class MLInternshipMatcher:
         # Shortlist internships with proper filtering
         shortlisted_internships = self._shortlist_internships(user_idx, top_n=100)
         
+        # If no internships are shortlisted, return empty list to prevent overfitting
         if not shortlisted_internships:
-            return []  # No internships shortlisted
+            print(f"No relevant internships found for user {user_idx}. This prevents overfitting.")
+            return []
             
         # Compute features for scoring
         features_df = self._compute_interaction_features(user_idx, shortlisted_internships)
@@ -538,31 +552,25 @@ class MLInternshipMatcher:
             
             # Domain match
             internship_domain = str(internship['Domain']).lower()
-            if (user_domain == internship_domain or 
-                user_domain in internship_domain or 
-                internship_domain in user_domain):
-                reasons.append("matches your preferred domain")
+            if user_domain == internship_domain:
+                reasons.append("exactly matches your preferred domain")
+            elif user_domain in internship_domain or internship_domain in user_domain:
+                reasons.append("partially matches your preferred domain")
             
             # Location match
             internship_location = str(internship['Location']).lower()
-            if (user_location == internship_location or 
-                internship_location == 'remote' or 
-                user_location == 'remote'):
-                if internship_location == 'remote':
-                    reasons.append("offers remote work")
-                else:
-                    reasons.append("available in your preferred location")
+            if user_location == internship_location:
+                reasons.append("exactly matches your preferred location")
+            elif internship_location == 'remote' or user_location == 'remote':
+                reasons.append("offers remote work")
             
             # Duration match
             internship_duration = str(internship['Duration']).lower()
-            duration_match = False
             if user_duration == internship_duration:
-                reasons.append("matches your preferred duration")
-                duration_match = True
+                reasons.append("exactly matches your preferred duration")
             elif ('12' in user_duration and ('year' in internship_duration or 'month' in internship_duration)) or \
                  ('6' in user_duration and 'month' in internship_duration):
                 reasons.append("has a compatible duration")
-                duration_match = True
             
             # Skills match
             user_skills = self._extract_skills_set(user['Skills'])
