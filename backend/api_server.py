@@ -10,6 +10,7 @@ import json
 import traceback
 import sys
 import os
+import requests
 
 # Add the ml_models directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
@@ -26,7 +27,7 @@ app = Flask(__name__)
 # Enable CORS for all routes with specific configuration
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://localhost", "http://127.0.0.1", "http://localhost:8000", "http://127.0.0.1:8000"],
+        "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://localhost", "http://127.0.0.1", "http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:*", "http://127.0.0.1:*"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
@@ -555,6 +556,40 @@ def batch_recommendations():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/translate_batch', methods=['POST'])
+def translate_batch():
+    """Proxy endpoint for translation service"""
+    try:
+        # Get the data from the request
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Forward the request to the translation service
+        translation_service_url = 'http://localhost:5001/translate_batch'
+        
+        try:
+            response = requests.post(translation_service_url, json=data, timeout=10)
+            
+            if response.status_code == 200:
+                return jsonify(response.json()), 200
+            else:
+                return jsonify({'error': f'Translation service error: {response.status_code}'}), response.status_code
+                
+        except requests.exceptions.ConnectionError:
+            return jsonify({'error': 'Translation service is not available. Please make sure the translation service is running on port 5001.'}), 503
+        except requests.exceptions.Timeout:
+            return jsonify({'error': 'Translation service timeout'}), 504
+        except Exception as e:
+            return jsonify({'error': f'Error connecting to translation service: {str(e)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     print("🚀 Starting Internship Matching API Server...")
     
