@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API Connection</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test-result { padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>API Connection Test</h1>
+    
+    <button id="testButton">Test API Connection</button>
+    
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('testButton').addEventListener('click', async function() {
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                // Test basic API connection
+                const response = await fetch('http://localhost:5000/');
+                if (response.ok) {
+                    const data = await response.json();
+                    resultsDiv.innerHTML += `<div class="test-result success">✅ API Connection Successful<br>Service: ${data.service}<br>Status: ${data.status}</div>`;
+                } else {
+                    resultsDiv.innerHTML += `<div class="test-result error">❌ API Connection Failed<br>Status: ${response.status}</div>`;
+                }
+                
+                // Test health endpoint
+                const healthResponse = await fetch('http://localhost:5000/health');
+                if (healthResponse.ok) {
+                    const healthData = await healthResponse.json();
+                    resultsDiv.innerHTML += `<div class="test-result success">✅ Health Check Successful<br>Users Loaded: ${healthData.users_loaded}<br>Internships Loaded: ${healthData.internships_loaded}<br>ML Model: ${healthData.ml_model_loaded ? 'Loaded' : 'Not Loaded'}</div>`;
+                } else {
+                    resultsDiv.innerHTML += `<div class="test-result error">❌ Health Check Failed<br>Status: ${healthResponse.status}</div>`;
+                }
+                
+                // Test AI recommendation endpoint with sample data
+                const sampleData = {
+                    "name": "Test User",
+                    "citizenship": "Indian",
+                    "age": 22,
+                    "eduMin": "BCA",
+                    "skills": "python, javascript, react",
+                    "domain": "Web Development",
+                    "location": "Bangalore",
+                    "duration": "12 Months",
+                    "edu": "Not in full-time",
+                    "income": "Up to ₹8,00,000",
+                    "aadhaarLink": "yes",
+                    "govtJob": "no"
+                };
+                
+                const aiResponse = await fetch('http://localhost:5000/ai_recommend', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(sampleData)
+                });
+                
+                if (aiResponse.ok) {
+                    const aiData = await aiResponse.json();
+                    resultsDiv.innerHTML += `<div class="test-result success">✅ AI Recommendation API Successful<br>Recommendations Found: ${aiData.total_recommendations}<br>Model Type: ${aiData.model_type}</div>`;
+                } else {
+                    const errorText = await aiResponse.text();
+                    resultsDiv.innerHTML += `<div class="test-result error">❌ AI Recommendation API Failed<br>Status: ${aiResponse.status}<br>Error: ${errorText}</div>`;
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="test-result error">❌ Connection Error: ${error.message}</div>`;
+            }
+        });
+    </script>
+</body>
+</html>

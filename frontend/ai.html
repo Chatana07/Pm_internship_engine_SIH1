@@ -7,46 +7,78 @@
   <title>AI-Based Recommendations Engine</title>
   <link rel="stylesheet" href="css/ai.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- PDF.js library for PDF text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <script>
+    // Set the worker URL for PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+  </script>
 </head>
 
 <body>
   <div class="header">
-    <h1><i class="fas fa-robot"></i> AI-Based Recommendations Engine</h1>
-    <h2 style="color: #fff; margin-top: 0; font-weight: 500;">For PM Internship Program</h2>
-    <p style="opacity: .8; font-size: 1.1rem;">Fill the criteria below and proceed to get personalized internship matches tailored to your profile.</p>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h1 id="mainTitle"><i class="fas fa-robot"></i> AI-Based Recommendations Engine</h1>
+        <h2 id="subtitle" style="color: #fff; margin-top: 0; font-weight: 500;">For PM Internship Program</h2>
+        <p id="description" style="opacity: .8; font-size: 1.1rem;">Fill the criteria below and proceed to get personalized internship matches tailored to your profile.</p>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button id="lang-en" class="btn secondary" style="padding: 5px 10px; font-size: 0.9rem;" onclick="switchLanguage('en')">English</button>
+        <button id="lang-hi" class="btn secondary" style="padding: 5px 10px; font-size: 0.9rem;" onclick="switchLanguage('hi')">हिंदी</button>
+        <button id="lang-bn" class="btn secondary" style="padding: 5px 10px; font-size: 0.9rem;" onclick="switchLanguage('bn')">বাংলা</button>
+      </div>
+    </div>
   </div>
 
   <form class="card" id="recommendationForm">
     <h2 id="formTitle"><i class="fas fa-clipboard-check"></i> Eligibility & Preferences</h2>
 
-    <!-- Eligibility Section -->
+    <!-- PDF Upload Section -->
     <div class="section">
-      <div class="subhead"><i class="fas fa-exclamation-circle"></i> <span style="color: red;">* </span>marked sections are mandatory</div>
-      <div class="grid eligibility-grid">
+      <div class="subhead"><i class="fas fa-file-pdf"></i> <span id="resumeUploadTitle">Resume Upload</span></div>
+      <p id="resumeUploadDesc" class="section-description">
+        Upload your resume to automatically extract your information.
+      </p>
+      
+      <div class="field">
+        <label for="resumeUpload"><span id="uploadLabel">Upload Resume (PDF)</span><span style="color: red;">*</span></label>
+        <input type="file" id="resumeUpload" class="control" accept=".pdf" required />
+        <div id="uploadHint" class="hint">Supported format: PDF only</div>
+        <button type="button" id="extractBtn" class="btn secondary" style="margin-top: 10px; display: none;">
+          <i class="fas fa-search"></i> <span id="extractInfo">Extract Information</span>
+        </button>
+        <div id="extractionStatus" class="message" style="margin-top: 10px; display: none;"></div>
+      </div>
+    </div>
 
+    <!-- Extracted Information Section -->
+    <div class="section">
+      <div class="subhead"><i class="fas fa-user"></i> <span id="personalInfoTitle">Personal Information</span></div>
+      <div class="grid eligibility-grid">
         <div class="field">
-          <label for="name">Name<span style="color: red;" name="name">*</span></label>
-          <input type="text" id="name" class="control" required placeholder="Enter your full name">
+          <label for="name"><span id="nameLabel">Name</span><span style="color: red;">*</span></label>
+          <input type="text" id="name" class="control" required placeholder="Extracted from resume or enter manually">
         </div>
 
         <div class="field">
-          <label for="citizenship">Citizenship<span style="color: red;">*</span></label>
+          <label for="citizenship"><span id="citizenshipLabel">Citizenship</span><span style="color: red;">*</span></label>
           <select id="citizenship" class="control" required>
             <option value="Indian" selected>Indian</option>
           </select>
-          <div class="hint">Must be an Indian citizen.</div>
+          <div id="citizenshipHint" class="hint">Must be an Indian citizen.</div>
         </div>
 
         <div class="field">
-          <label for="age">Age<span style="color: red;">*</span></label>
-          <input id="age" type="number" min="21" max="24" class="control" required />
-          <div class="hint">Between 21–24 years.</div>
+          <label for="age"><span id="ageLabel">Age</span><span style="color: red;">*</span></label>
+          <input id="age" type="number" min="21" max="24" class="control" required placeholder="Enter your age" />
+          <div id="ageHint" class="hint">Between 21–24 years.</div>
         </div>
 
         <div class="field">
-          <label for="eduMin">Education</label>
+          <label for="eduMin"><span id="educationLabel">Education</span><span style="color: red;">*</span></label>
           <select id="eduMin" class="control" required>
-            <option value="" disabled selected>-- Select an option --</option>
+            <option value="" disabled selected>-- Extracted from resume or select --</option>
             <option>Class 10</option>
             <option>ITI</option>
             <option>Diploma</option>
@@ -62,15 +94,16 @@
     </div>
 
     <div class="section">
-      <div class="subhead"><i class="fas fa-sliders-h"></i> Preferences</div>
+      <div class="subhead"><i class="fas fa-sliders-h"></i> <span id="preferencesTitle">Preferences</span></div>
       <div class="grid eligibility-grid">
         <div class="field">
-          <label for="skills">Skills<span style="color: red;">*</span></label>
-          <input type="text" id="skills" placeholder="e.g. HTML, CSS, Python" class="control" required />
+          <label for="skills"><span id="skillsLabel">Skills</span><span style="color: red;">*</span></label>
+          <input type="text" id="skills" placeholder="Extracted from resume or enter skills manually" class="control" required />
+          <div id="skillsHint" class="hint">Skills extracted from your resume will appear here.</div>
         </div>
 
         <div class="field">
-          <label for="domain">Preferred Domain<span style="color: red;">*</span></label>
+          <label for="domain"><span id="domainLabel">Preferred Domain</span><span style="color: red;">*</span></label>
           <select id="domain" class="control" required>
             <option value="" disabled selected>-- Select an option --</option>
             <option>Web Development</option>
@@ -84,7 +117,7 @@
         </div>
 
         <div class="field">
-          <label for="location">Preferred Location<span style="color: red;">*</span></label>
+          <label for="location"><span id="locationLabel">Preferred Location</span><span style="color: red;">*</span></label>
           <select id="location" class="control" required>
             <option value="" disabled selected>-- Select an option --</option>
             <option>Remote</option>
@@ -96,7 +129,7 @@
         </div>
 
         <div class="field">
-          <label for="duration">Internship Duration</label>
+          <label for="duration"><span id="durationLabel">Internship Duration</span></label>
           <select id="duration" class="control">
             <option value="" disabled selected>-- Select an option --</option>
             <option>12 Months</option>
@@ -107,59 +140,59 @@
 
     <!-- Enrollment Status -->
     <div class="section edu">
-      <div class="subhead"><i class="fas fa-graduation-cap"></i> Enrollment Status</div>
+      <div class="subhead"><i class="fas fa-graduation-cap"></i> <span id="enrollmentTitle">Enrollment Status</span></div>
       <div class="field">
-        <label class="label">Current Status<span style="color: red;">*</span></label>
+        <label class="label"><span id="currentStatusLabel">Current Status</span><span style="color: red;">*</span></label>
         <div class="radio-group" role="radiogroup">
         <label class="radio">
           <input type="radio" value="Not in full-time" checked required name="edu"/>
-          <span>Not in full-time job/study</span>
+          <span id="notEnrolled">Not in full-time job/study</span>
         </label>
         <label class="radio">
           <input type="radio" value="Enrolled full-time" name="edu"/>
-          <span>Enrolled in full-time study/job (ineligible)</span>
+          <span id="enrolledFullTime">Enrolled in full-time study/job (ineligible)</span>
         </label>
         <label class="radio">
           <input type="radio" value="Distance/Online OK" name="edu"/>
-          <span>Distance / Online program</span>
+          <span id="distanceLearning">Distance / Online program</span>
         </label>
       </div>
-        <div class="hint">Distance/online programs are allowed.</div>
+        <div id="enrollmentHint" class="hint">Distance/online programs are allowed.</div>
       </div>
       <p id="eduErrMessage" class="message"></p>
     </div>
 
     <!-- Family Income -->
     <div class="section">
-      <div class="subhead"><i class="fas fa-money-bill-wave"></i> Financial Information</div>
+      <div class="subhead"><i class="fas fa-money-bill-wave"></i> <span id="financialInfoTitle">Financial Information</span></div>
       <div class="grid">
         <div class="field">
-          <label for="income" class="label">Family Income (Max)<span style="color: red;">*</span></label>
+          <label for="income" class="label"><span id="familyIncomeLabel">Family Income (Max)</span><span style="color: red;">*</span></label>
           <select id="income" class="control" required>
             <option>&lt; ₹1,00,000</option>
             <option>₹1,00,000 – ₹3,00,000</option>
             <option>₹3,00,000 – ₹5,00,000</option>
             <option selected>Up to ₹8,00,000</option>
           </select>
-          <div class="hint">Must not exceed ₹8 lakh per annum.</div>
+          <div id="incomeHint" class="hint">Must not exceed ₹8 lakh per annum.</div>
         </div>
       </div>
     </div>
 
     <section class="section aadhaar-section">
-      <div class="subhead"><i class="fas fa-id-card"></i> Bank Account & Aadhaar Linking</div>
-      <p class="section-description">
+      <div class="subhead"><i class="fas fa-id-card"></i> <span id="aadhaarTitle">Bank Account & Aadhaar Linking</span></div>
+      <p id="aadhaarDesc" class="section-description">
         Please confirm if your bank account is linked with your Aadhaar for seamless stipend disbursement.
       </p>
 
       <div class="radio-group">
         <label class="radio">
           <input type="radio" name="aadhaarLink" value="yes" required>
-          <span>Yes, my bank account is linked with Aadhaar</span>
+          <span id="aadhaarYes">Yes, my bank account is linked with Aadhaar</span>
         </label>
         <label class="radio">
           <input type="radio" name="aadhaarLink" value="no" required>
-          <span>No, my bank account is not linked with Aadhaar</span>
+          <span id="aadhaarNo">No, my bank account is not linked with Aadhaar</span>
         </label>
       </div>
       <p id="aadhaarMessage" class="message"></p>
@@ -167,8 +200,8 @@
 
     <!-- Government Job Status Section -->
     <section class="section govt-job-section">
-      <div class="subhead"><i class="fas fa-briefcase"></i> Government Job Status</div>
-      <p class="section-description">
+      <div class="subhead"><i class="fas fa-briefcase"></i> <span id="govtJobTitle">Government Job Status</span></div>
+      <p id="govtJobDesc" class="section-description">
         Please let us know if you, any of your family members, or your spouse have a government job.
       </p>
 
@@ -177,11 +210,11 @@
         <div class="radio-group">
           <label class="radio">
             <input type="radio" name="govtJob" value="yes" required>
-            <span>Yes</span>
+            <span id="govtJobYes">Yes</span>
           </label>
           <label class="radio">
             <input type="radio" name="govtJob" value="no" required>
-            <span>No</span>
+            <span id="govtJobNo">No</span>
           </label>
         </div>
 
@@ -192,8 +225,8 @@
 
     <!-- Actions -->
     <div class="actions">
-      <button type="reset" class="btn secondary"><i class="fas fa-undo"></i> Reset Form</button>
-      <button type="submit" class="btn primary submit-btn"><i class="fas fa-robot"></i> Get AI Recommendations</button>
+      <button type="reset" class="btn secondary"><i class="fas fa-undo"></i> <span id="resetBtn">Reset Form</span></button>
+      <button type="submit" class="btn primary submit-btn"><i class="fas fa-robot"></i> <span id="getRecommendationsBtn">Get AI Recommendations</span></button>
     </div>
   </form>
   <script src="js/ai.js"></script>
