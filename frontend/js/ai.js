@@ -618,6 +618,17 @@ async function getAIRecommendations(formData) {
   }
 }
 
+// Function to get the appropriate CSS class based on similarity score
+function getScoreClass(score) {
+  if (score >= 0.8) {
+    return 'similarity-score high';
+  } else if (score >= 0.5) {
+    return 'similarity-score medium';
+  } else {
+    return 'similarity-score low';
+  }
+}
+
 // Function to display recommendations
 function displayRecommendations(result) {
   // Check if there are any recommendations
@@ -678,7 +689,7 @@ function displayRecommendations(result) {
                 <div class="recommendation-card">
                   <div class="card-header">
                     <h4>${index + 1}. ${rec.company} - ${rec.role}</h4>
-                    <span class="similarity-score">Score: ${(rec.similarity_score * 100).toFixed(1)}%</span>
+                    <span class="${getScoreClass(rec.similarity_score)}">Score: ${(rec.similarity_score * 100).toFixed(1)}%</span>
                   </div>
                   <div class="card-body">
                     <p><strong>Domain:</strong> ${rec.domain}</p>
@@ -687,6 +698,12 @@ function displayRecommendations(result) {
                     <p><strong>Duration:</strong> ${rec.duration}</p>
                     <p><strong>Stipend:</strong> ${rec.stipend}</p>
                     <p><strong>Why Recommended:</strong> ${rec.reason}</p>
+                  </div>
+                  <!-- Translation buttons for each recommendation -->
+                  <div class="translation-controls">
+                    <button class="translate-btn" data-index="${index}" data-lang="en">English</button>
+                    <button class="translate-btn" data-index="${index}" data-lang="hi">हिंदी</button>
+                    <button class="translate-btn" data-index="${index}" data-lang="bn">বাংলা</button>
                   </div>
                 </div>
               `).join('')}
@@ -701,6 +718,15 @@ function displayRecommendations(result) {
     
     // Add modal to page
     document.body.insertAdjacentHTML('beforeend', recommendationsHTML);
+    
+    // Add event listeners for translation buttons
+    document.querySelectorAll('.translate-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        const index = this.getAttribute('data-index');
+        const lang = this.getAttribute('data-lang');
+        translateRecommendation(index, lang, result.recommendations);
+      });
+    });
   }
   
   // Add event listeners for closing modal
@@ -716,6 +742,124 @@ function displayRecommendations(result) {
   
   // Show modal
   document.querySelector('.recommendations-modal').style.display = 'block';
+}
+
+// Function to translate a specific recommendation
+async function translateRecommendation(index, targetLang, recommendations) {
+  const rec = recommendations[index];
+  const card = document.querySelectorAll('.recommendation-card')[index];
+  
+  // Show loading state
+  const translateButtons = card.querySelectorAll('.translate-btn');
+  const originalButtonText = {};
+  translateButtons.forEach(btn => {
+    originalButtonText[btn.getAttribute('data-lang')] = btn.textContent;
+    if (btn.getAttribute('data-lang') === targetLang) {
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+    btn.disabled = true;
+  });
+  
+  try {
+    // Create complete field strings to translate
+    const fieldStrings = [
+      `${index + 1}. ${rec.company} - ${rec.role}`, // Card header
+      `Domain: ${rec.domain}`,
+      `Location: ${rec.location}`,
+      `Type: ${rec.type}`,
+      `Duration: ${rec.duration}`,
+      `Stipend: ${rec.stipend}`,
+      `Why Recommended: ${rec.reason}`
+    ];
+    
+    // Send request to translation service through the main API server (to avoid CORS issues)
+    const response = await fetch('http://localhost:5000/translate_batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+        // Note: We don't need to set CORS headers here as the API server handles them
+      },
+      body: JSON.stringify({
+        texts: fieldStrings,
+        target_lang: targetLang
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const translations = data.translations;
+      
+      // Update the card content with translations
+      const cardHeader = card.querySelector('.card-header h4');
+      const cardBody = card.querySelector('.card-body');
+      
+      // Update header (first translation)
+      cardHeader.innerHTML = translations[0].translated;
+      
+      // Update body content
+      const bodyParagraphs = cardBody.querySelectorAll('p');
+      for (let i = 0; i < bodyParagraphs.length && i+1 < translations.length; i++) {
+        // Replace entire paragraph content with translated string
+        bodyParagraphs[i].innerHTML = translations[i+1].translated.replace(/\n/g, '<br>');
+      }
+      
+      // Update button states to show which language is active
+      translateButtons.forEach(btn => {
+        btn.textContent = originalButtonText[btn.getAttribute('data-lang')];
+        btn.disabled = false;
+        
+        if (btn.getAttribute('data-lang') === targetLang) {
+          btn.style.backgroundColor = '#1976d2';
+          btn.style.color = 'white';
+        } else {
+          btn.style.backgroundColor = '';
+          btn.style.color = '';
+        }
+      });
+    } else {
+      // Handle HTTP errors
+      const errorText = await response.text();
+      throw new Error(`Translation service error: ${response.status} - ${errorText}`);
+    }
+  } catch (error) {
+    console.error('Translation error:', error);
+    
+    // Restore button states
+    translateButtons.forEach(btn => {
+      btn.textContent = originalButtonText[btn.getAttribute('data-lang')];
+      btn.disabled = false;
+    });
+    
+    // Show detailed error message
+    let errorMessage = 'Translation failed. Please try again.';
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      errorMessage = 'Could not connect to translation service. Please ensure the service is running.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    // Show error in a more user-friendly way
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'translation-error-message';
+    errorDiv.innerHTML = `
+      <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border: 1px solid #f5c6cb; border-radius: 4px; margin: 10px 15px; font-size: 0.9rem;">
+        <strong>Translation Error:</strong> ${errorMessage}
+      </div>
+    `;
+    
+    // Add error message to the card
+    const cardBody = card.querySelector('.card-body');
+    if (cardBody && !cardBody.querySelector('.translation-error-message')) {
+      cardBody.parentNode.insertBefore(errorDiv, cardBody.nextSibling);
+      
+      // Remove error message after 5 seconds
+      setTimeout(() => {
+        if (errorDiv.parentNode) {
+          errorDiv.parentNode.removeChild(errorDiv);
+        }
+      }, 5000);
+    }
+  }
 }
 
 // Function to close modal
@@ -872,11 +1016,33 @@ document.head.insertAdjacentHTML('beforeend', `
     }
     
     .similarity-score {
-      background-color: #1976d2;
-      color: white;
-      padding: 5px 10px;
-      border-radius: 15px;
+      background-color: #ffffff;
+      color: #1976d2;
+      padding: 6px 12px;
+      border-radius: 20px;
       font-size: 0.9rem;
+      font-weight: 600;
+      border: 2px solid #1976d2;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Add a vibrant color coding based on score */
+    .similarity-score.high {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      border-color: #2e7d32;
+    }
+    
+    .similarity-score.medium {
+      background-color: #fff8e1;
+      color: #f57f17;
+      border-color: #f57f17;
+    }
+    
+    .similarity-score.low {
+      background-color: #ffebee;
+      color: #c62828;
+      border-color: #c62828;
     }
     
     .card-body {
@@ -909,6 +1075,35 @@ document.head.insertAdjacentHTML('beforeend', `
     
     .close-modal-btn:hover {
       background-color: #1565c0;
+    }
+    
+    /* Translation controls */
+    .translation-controls {
+      padding: 10px 15px;
+      background-color: #f9f9f9;
+      border-top: 1px solid #eee;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    
+    .translate-btn {
+      padding: 5px 10px;
+      border: 1px solid #1976d2;
+      background-color: white;
+      color: #1976d2;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    
+    .translate-btn:hover {
+      background-color: #e3f2fd;
+    }
+    
+    .translate-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     
     /* Ensure all text in modal is visible */
@@ -998,7 +1193,8 @@ const translations = {
     ageHint: "Between 21–24 years.",
     enrollmentHint: "Distance/online programs are allowed.",
     incomeHint: "Must not exceed ₹8 lakh per annum.",
-    uploadHint: "Supported format: PDF only (Optional)"
+    uploadHint: "Supported format: PDF only (Optional)",
+    translationNote: "After getting recommendations, you can translate internship details to Hindi or Bengali using the language buttons on each card."
   },
   hi: {
     mainTitle: "एआई-आधारित अनुशंसा इंजन",
@@ -1039,7 +1235,8 @@ const translations = {
     ageHint: "21-24 वर्ष के बीच।",
     enrollmentHint: "दूरस्थ/ऑनलाइन कार्यक्रमों की अनुमति है।",
     incomeHint: "प्रति वर्ष ₹8 लाख से अधिक नहीं होना चाहिए।",
-    uploadHint: "समर्थित प्रारूप: केवल पीडीएफ (वैकल्पिक)"
+    uploadHint: "समर्थित प्रारूप: केवल पीडीएफ (वैकल्पिक)",
+    translationNote: "अनुशंसाएं प्राप्त करने के बाद, आप प्रत्येक कार्ड पर भाषा बटन का उपयोग करकে इंटर्नशिप विवरण का हिंदी या बंगाली में अनुवाद कर सकते हैं।"
   },
   bn: {
     mainTitle: "এআই-ভিত্তিক সুপারিশ ইঞ্জিন",
@@ -1080,7 +1277,8 @@ const translations = {
     ageHint: "21-24 বছরের মধ্যে।",
     enrollmentHint: "দূরবর্তী/অনলাইন প্রোগ্রামগুলি অনুমোদিত।",
     incomeHint: "প্রতি বছর ₹8 লক্ষের বেশি হওয়া উচিত নয়।",
-    uploadHint: "সমর্থিত বিন্যাস: শুধুমাত্র পিডিএফ (ঐচ্ছিক)"
+    uploadHint: "সমর্থিত বিন্যাস: শুধুমাত্র পিডিএফ (ঐচ্ছিক)",
+    translationNote: "সুপারিশ পেতে পরে, আপনি প্রতিটি কার্ডের ভাষা বোতামগুলি ব্যবহার করে ইন্টার্নশিপের বিবরণগুলি হিন্দি বা বাংলায় অনুবাদ করতে পারেন।"
   }
 };
 
@@ -1112,8 +1310,14 @@ async function switchLanguage(lang) {
     'familyIncomeLabel', 'aadhaarTitle', 'aadhaarDesc', 'aadhaarYes', 'aadhaarNo',
     'govtJobTitle', 'govtJobDesc', 'govtJobYes', 'govtJobNo', 'resetBtn',
     'getRecommendationsBtn', 'citizenshipHint', 'ageHint', 'enrollmentHint',
-    'incomeHint', 'uploadHint'
+    'incomeHint', 'uploadHint', 'translationNote'
   ];
+  
+  // Update translation note specifically
+  const translationNoteElement = document.querySelector('.translation-note p');
+  if (translationNoteElement && translations[lang].translationNote) {
+    translationNoteElement.innerHTML = `<i class="fas fa-language"></i> ${translations[lang].translationNote}`;
+  }
   
   // Collect texts to translate
   const textsToTranslate = [];
@@ -1141,7 +1345,7 @@ async function switchLanguage(lang) {
   // For other languages, try to use the translation service
   try {
     // Try to translate using the backend service
-    const response = await fetch('http://localhost:5001/translate_batch', {
+    const response = await fetch('http://localhost:5000/translate_batch', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

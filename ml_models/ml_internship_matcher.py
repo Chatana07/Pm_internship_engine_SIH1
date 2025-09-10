@@ -195,12 +195,19 @@ class MLInternshipMatcher:
                                     user_domain in internship_domain or 
                                     internship_domain in user_domain) else 0
             
-            # Location match (simplified but more accurate)
+            # Location match (simplified but more accurate) - FIXED LOGIC
             user_location = str(user['PreferredLocation']).lower()
             internship_location = str(internship['Location']).lower()
-            location_match_flag = 1 if (user_location == internship_location or 
-                                      internship_location == 'remote' or 
-                                      user_location == 'remote') else 0
+            
+            # More accurate location matching logic
+            if user_location == internship_location:
+                location_match_flag = 1  # Exact match
+            elif internship_location == 'remote':
+                location_match_flag = 1  # Remote work is always a match
+            elif user_location == 'remote' and internship_location != 'remote':
+                location_match_flag = 0  # User wants remote but job is not remote
+            else:
+                location_match_flag = 0  # No match
             
             # Duration match - improved logic
             user_duration = str(user['InternshipDuration']).lower()
@@ -276,15 +283,23 @@ class MLInternshipMatcher:
         if not domain_filtered:
             return []
         
-        # Filter by location - prefer exact match or remote
+        # Filter by location - prefer exact match or remote - FIXED LOGIC
         location_filtered = []
         for idx in domain_filtered:
             internship = self.internships_df.iloc[idx]
             internship_location = str(internship['Location']).lower()
             
-            # Exact location match or remote work
-            if user_location == internship_location or internship_location == 'remote' or user_location == 'remote':
-                location_filtered.append(idx)
+            # More accurate location matching
+            if user_location == internship_location:
+                location_filtered.append(idx)  # Exact match
+            elif internship_location == 'remote':
+                location_filtered.append(idx)  # Remote work is always acceptable
+            elif user_location == 'remote' and internship_location != 'remote':
+                # User wants remote but job is not remote - don't include
+                pass
+            else:
+                # Both have specific locations but don't match - don't include
+                pass
         
         # If no location matches, use domain filtered results (but still better than all internships)
         if not location_filtered:
@@ -557,12 +572,20 @@ class MLInternshipMatcher:
             elif user_domain in internship_domain or internship_domain in user_domain:
                 reasons.append("partially matches your preferred domain")
             
-            # Location match
+            # Location match - FIXED LOGIC
             internship_location = str(internship['Location']).lower()
             if user_location == internship_location:
                 reasons.append("exactly matches your preferred location")
-            elif internship_location == 'remote' or user_location == 'remote':
+            elif user_location == 'remote' and internship_location != 'remote':
+                # User wants remote but job is not remote - don't claim it offers remote work
+                pass
+            elif internship_location == 'remote':
+                # Job is remote - this is a good match regardless of user preference
                 reasons.append("offers remote work")
+            elif user_location != 'remote' and internship_location != 'remote':
+                # Both user and job have specific locations - check if they match
+                if user_location == internship_location:
+                    reasons.append("exactly matches your preferred location")
             
             # Duration match
             internship_duration = str(internship['Duration']).lower()
@@ -580,7 +603,7 @@ class MLInternshipMatcher:
             
             # If no specific reasons, provide a general one
             if not reasons:
-                reasons.append("relevant based on your profile")
+                reasons.append("is relevant based on your profile")
             
             reason_text = " and ".join(reasons)
             

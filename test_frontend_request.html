@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Translation Request</title>
+</head>
+<body>
+    <h1>Test Translation Request</h1>
+    <button id="testBtn">Test Translation</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async function() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                // Test data similar to what the frontend sends
+                const testData = {
+                    texts: ["Hello world", "Test translation"],
+                    target_lang: "hi"
+                };
+                
+                console.log('Sending request to:', 'http://localhost:5000/translate_batch');
+                
+                const response = await fetch('http://localhost:5000/translate_batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                console.log('Response received:', response);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } else {
+                    const errorText = await response.text();
+                    resultDiv.innerHTML = 'Error: ' + response.status + ' - ' + errorText;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                resultDiv.innerHTML = 'Fetch error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>
