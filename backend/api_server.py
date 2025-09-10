@@ -26,7 +26,7 @@ app = Flask(__name__)
 # Enable CORS for all routes with specific configuration
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://localhost", "http://127.0.0.1"],
+        "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://localhost", "http://127.0.0.1", "http://localhost:8000", "http://127.0.0.1:8000"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
@@ -555,8 +555,6 @@ def batch_recommendations():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
 if __name__ == '__main__':
     print("🚀 Starting Internship Matching API Server...")
     
