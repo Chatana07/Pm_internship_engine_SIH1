@@ -28,7 +28,7 @@ async function extractResumeInfo() {
   const extractionStatus = document.getElementById('extractionStatus');
   
   if (!resumeUpload.files || resumeUpload.files.length === 0) {
-    showExtractionStatus('Please select a PDF file first.', 'error');
+    showExtractionStatus('No file selected. You can still get recommendations without uploading a resume.', 'info');
     return;
   }
   
@@ -487,11 +487,16 @@ document.querySelector("form").addEventListener("submit", function(e) {
     return;
   }
   
-  // Check if all required fields are filled
+  // Check if all required fields are filled (excluding resume upload)
   const requiredFields = document.querySelectorAll("[required]");
   let allFilled = true;
   
   requiredFields.forEach(field => {
+    // Skip resume upload field as it's now optional
+    if (field.id === "resumeUpload") {
+      return; // Skip this field
+    }
+    
     if (!field.value && !field.checked) {
       // Special handling for radio buttons
       if (field.type === 'radio') {
@@ -959,7 +964,7 @@ const translations = {
     subtitle: "For PM Internship Program",
     description: "Fill the criteria below and proceed to get personalized internship matches tailored to your profile.",
     resumeUploadTitle: "Resume Upload",
-    resumeUploadDesc: "Upload your resume to automatically extract your information.",
+    resumeUploadDesc: "Upload your resume to automatically extract your information. (Optional)",
     uploadLabel: "Upload Resume (PDF)",
     extractInfo: "Extract Information",
     personalInfoTitle: "Personal Information",
@@ -993,14 +998,14 @@ const translations = {
     ageHint: "Between 21–24 years.",
     enrollmentHint: "Distance/online programs are allowed.",
     incomeHint: "Must not exceed ₹8 lakh per annum.",
-    uploadHint: "Supported format: PDF only"
+    uploadHint: "Supported format: PDF only (Optional)"
   },
   hi: {
     mainTitle: "एआई-आधारित अनुशंसा इंजन",
     subtitle: "पीएम इंटर्नशिप कार्यक्रम के लिए",
     description: "अपनी प्रोफ़ाइल के अनुरूप व्यक्तिगत इंटर्नशिप मैच प्राप्त करने के लिए नीचे मानदंड भरें और आगे बढ़ें।",
     resumeUploadTitle: "रिज्यूमे अपलोड करें",
-    resumeUploadDesc: "अपनी जानकारी स्वचालित रूप से निकालने के लिए अपना रिज्यूमे अपलोड करें।",
+    resumeUploadDesc: "अपनी जानकारी स्वचालित रूप से निकालने के लिए अपना रिज्यूमे अपलोड करें। (वैकल्पिक)",
     uploadLabel: "रिज्यूमे अपलोड करें (पीडीएफ)",
     extractInfo: "जानकारी निकालें",
     personalInfoTitle: "व्यक्तिगत जानकारी",
@@ -1034,14 +1039,14 @@ const translations = {
     ageHint: "21-24 वर्ष के बीच।",
     enrollmentHint: "दूरस्थ/ऑनलाइन कार्यक्रमों की अनुमति है।",
     incomeHint: "प्रति वर्ष ₹8 लाख से अधिक नहीं होना चाहिए।",
-    uploadHint: "समर्थित प्रारूप: केवल पीडीएफ"
+    uploadHint: "समर्थित प्रारूप: केवल पीडीएफ (वैकल्पिक)"
   },
   bn: {
     mainTitle: "এআই-ভিত্তিক সুপারিশ ইঞ্জিন",
     subtitle: "পিএম ইন্টার্নশিপ প্রোগ্রামের জন্য",
     description: "আপনার প্রোফাইলের জন্য ব্যক্তিগতভাবে মানানসই ইন্টার্নশিপ ম্যাচ পেতে নীচের মানদণ্ডগুলি পূরণ করুন এবং এগিয়ে যান।",
     resumeUploadTitle: "রেজুমে আপলোড করুন",
-    resumeUploadDesc: "স্বয়ংক্রিয়ভাবে আপনার তথ্য নিষ্কাশন করতে আপনার রেজুমে আপলোড করুন।",
+    resumeUploadDesc: "স্বয়ংক্রিয়ভাবে আপনার তথ্য নিষ্কাশন করতে আপনার রেজুমে আপলোড করুন। (ঐচ্ছিক)",
     uploadLabel: "রেজুমে আপলোড করুন (পিডিএফ)",
     extractInfo: "তথ্য নিষ্কাশন করুন",
     personalInfoTitle: "ব্যক্তিগত তথ্য",
@@ -1075,7 +1080,7 @@ const translations = {
     ageHint: "21-24 বছরের মধ্যে।",
     enrollmentHint: "দূরবর্তী/অনলাইন প্রোগ্রামগুলি অনুমোদিত।",
     incomeHint: "প্রতি বছর ₹8 লক্ষের বেশি হওয়া উচিত নয়।",
-    uploadHint: "সমর্থিত বিন্যাস: শুধুমাত্র পিডিএফ"
+    uploadHint: "সমর্থিত বিন্যাস: শুধুমাত্র পিডিএফ (ঐচ্ছিক)"
   }
 };
 
