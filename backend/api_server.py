@@ -23,6 +23,14 @@ except ImportError as e:
     ML_MODEL_AVAILABLE = False
     print(f"⚠️ ML model not available. Please check ml_models/ml_internship_matcher.py: {e}")
 
+# Import the Job Recommender for direct ML model usage
+try:
+    from job_recommender import JobRecommender
+    JOB_RECOMMENDER_AVAILABLE = True
+except ImportError as e:
+    JOB_RECOMMENDER_AVAILABLE = False
+    print(f"⚠️ Job recommender not available. Please check ml_models/job_recommender.py: {e}")
+
 app = Flask(__name__)
 # Enable CORS for all routes with specific configuration
 CORS(app, resources={
@@ -105,6 +113,7 @@ def home():
             'POST /recommend': 'Get internship recommendations (rule-based)',
             'POST /ml_recommend': 'Get internship recommendations (ML-based)',
             'POST /ai_recommend': 'Get AI recommendations from frontend form',
+            'POST /job_recommend': 'Get job recommendations using trained ML model',
             'GET /user/<user_id>': 'Get user information',
             'GET /users': 'List all users',
             'GET /internships': 'List all internships'
@@ -588,6 +597,54 @@ def translate_batch():
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/job_recommend', methods=['POST'])
+def get_job_recommendations():
+    """Get job recommendations using the trained ML model."""
+    if not JOB_RECOMMENDER_AVAILABLE:
+        return jsonify({'error': 'Job recommender not available'}), 500
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided in request body'}), 400
+        
+        # Get the root directory
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Initialize job recommender with dataset and model paths
+        jobs_dataset_path = os.path.join(root_dir, 'dataset', 'Jobs_cleaned.csv')
+        model_path = os.path.join(root_dir, 'ml_models', 'jobs_matcher_model.joblib')
+        
+        recommender = JobRecommender(
+            jobs_dataset_path=jobs_dataset_path,
+            model_path=model_path
+        )
+        
+        # Extract user information from request
+        skills = data.get('skills', '')
+        location = data.get('location', 'any')
+        experience = data.get('experience', '0-2 years')
+        top_k = data.get('top_k', 5)
+        
+        # Get recommendations
+        recommendations = recommender.get_recommendations(skills, location, experience, top_k)
+        
+        return jsonify({
+            'user_input': {
+                'skills': skills,
+                'location': location,
+                'experience': experience
+            },
+            'recommendations': recommendations,
+            'total_recommendations': len(recommendations),
+            'model_type': 'trained-ml-based'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 if __name__ == '__main__':
