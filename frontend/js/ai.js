@@ -56,8 +56,12 @@ async function extractResumeInfo() {
       fullText += pageText + ' ';
     }
     
+    console.log('Extracted text from PDF:', fullText.substring(0, 500) + '...'); // Log first 500 characters
+    
     // Extract information from text
     const extractedInfo = extractInfoFromText(fullText);
+    
+    console.log('Extracted information:', extractedInfo); // Log extracted info
     
     // Populate form fields
     populateFormFields(extractedInfo);
@@ -86,6 +90,8 @@ function extractInfoFromText(text) {
     education: ''
   };
   
+  console.log('Starting extraction from text...');
+  
   // Convert to lowercase for easier matching
   const lowerText = text.toLowerCase();
   
@@ -95,7 +101,12 @@ function extractInfoFromText(text) {
     /name[^\w\n\r]*([a-z\s\-'.]{2,50})/i,
     /candidate[^\w\n\r]*([a-z\s\-'.]{2,50})/i,
     /applicant[^\w\n\r]*([a-z\s\-'.]{2,50})/i,
-    /^([a-z\s\-'.]{2,50})\n/i  // First line with reasonable name length
+    /resume[^\w\n\r]*of[^\w\n\r]*([a-z\s\-'.]{2,50})/i,
+    /cv[^\w\n\r]*of[^\w\n\r]*([a-z\s\-'.]{2,50})/i,
+    /(?:^|\n)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/,
+    /^([a-z\s\-'.]{2,50})\n/i,  // First line with reasonable name length
+    /\n([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*\n/, // Name as a separate line
+    /([A-Z][a-z]+\s+[A-Z][a-z]+)/ // First and last name pattern
   ];
   
   // Try to find name using patterns
@@ -103,23 +114,37 @@ function extractInfoFromText(text) {
     const match = text.match(pattern);
     if (match && match[1]) {
       let name = match[1].trim();
+      console.log('Found potential name match:', name);
       // Validate that it looks like a proper name (not just random text)
       if (isValidName(name)) {
         info.name = formatName(name);
+        console.log('Valid name found:', info.name);
         break;
+      } else {
+        console.log('Name validation failed for:', name);
       }
     }
   }
   
   // If no name found with patterns, try to find it at the very beginning of the document
   if (!info.name) {
+    console.log('No name found with patterns, trying alternative approach...');
     // Get first few lines of the document
     const lines = text.split('\n').slice(0, 10);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
+      console.log('Checking line for name:', line);
       // Check if line contains only capitalized words with spaces (typical for names)
       if (line && line.length > 2 && line.length < 40 && isValidName(line)) {
         info.name = formatName(line);
+        console.log('Name found from lines check:', info.name);
+        break;
+      }
+      // Additional check for names that start with capital letters
+      const nameMatch = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/);
+      if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
+        info.name = formatName(nameMatch[1]);
+        console.log('Name found from regex check:', info.name);
         break;
       }
     }
@@ -131,6 +156,7 @@ function extractInfoFromText(text) {
     const age = parseInt(ageMatch[1]);
     if (age >= 18 && age <= 35) {
       info.age = age;
+      console.log('Age found:', info.age);
     }
   }
   
@@ -161,24 +187,115 @@ function extractInfoFromText(text) {
   
   // Remove duplicates
   info.skills = [...new Set(foundSkills)];
+  console.log('Skills found:', info.skills);
   
-  // Extract education
-  const educationPatterns = [
-    { pattern: /\b(bachelor|b\.?\s*a\.?|b\.?\s*tech|b\.?\s*e\.?|b\.?\s*sc\.?|b\.?\s*com\.?|bca|bba)\b/i, value: 'Bachelor' },
-    { pattern: /\b(master|m\.?\s*a\.?|m\.?\s*tech|m\.?\s*e\.?|m\.?\s*sc\.?|m\.?\s*com\.?|mca|mba)\b/i, value: 'Master' },
-    { pattern: /\b(diploma)\b/i, value: 'Diploma' },
-    { pattern: /\b(class\s*10|class\s*x)\b/i, value: 'Class 10' },
-    { pattern: /\b(class\s*12|class\s*xii)\b/i, value: 'Class 12' },
-    { pattern: /\b(iti)\b/i, value: 'ITI' }
-  ];
+  // Extract education using a more comprehensive mapping
+  // Create a hash map for education qualifications
+  const educationMap = {
+    // Bachelor's degrees
+    'bca': 'BCA',
+    'bba': 'BBA',
+    'bcom': 'B.Com',
+    'b.sc': 'B.Sc',
+    'bachelor of science': 'B.Sc',
+    'bachelor of commerce': 'B.Com',
+    'bachelor of arts': 'BA',
+    'ba': 'BA',
+    'btech': 'B.Tech',
+    'b.tech': 'B.Tech',
+    'be': 'B.E',
+    'b.e': 'B.E',
+    'bachelor of engineering': 'B.E',
+    'bachelor of technology': 'B.Tech',
+    'bachelor': 'Bachelor',
+    'b.pharma': 'B.Pharma',
+    'bachelor of pharmacy': 'B.Pharma',
+    
+    // Master's degrees
+    'mca': 'MCA',
+    'mba': 'MBA',
+    'mcom': 'M.Com',
+    'm.sc': 'M.Sc',
+    'master of science': 'M.Sc',
+    'master of commerce': 'M.Com',
+    'master of arts': 'MA',
+    'ma': 'MA',
+    'mtech': 'M.Tech',
+    'm.tech': 'M.Tech',
+    'me': 'M.E',
+    'm.e': 'M.E',
+    'master of engineering': 'M.E',
+    'master of technology': 'M.Tech',
+    'master': 'Master',
+    
+    // Other qualifications
+    'diploma': 'Diploma',
+    'iti': 'ITI',
+    'class 10': 'Class 10',
+    'class x': 'Class 10',
+    '10th': 'Class 10',
+    'class 12': 'Class 12',
+    'class xii': 'Class 12',
+    '12th': 'Class 12'
+  };
   
-  for (const { pattern, value } of educationPatterns) {
+  // Search for education keywords in the text
+  const educationKeywords = Object.keys(educationMap);
+  let highestLevelEducation = '';
+  
+  console.log('Searching for education keywords...');
+  // Look for education patterns in the text
+  for (const keyword of educationKeywords) {
+    // Create a regex pattern to match the education keyword with word boundaries
+    const pattern = new RegExp(`\\b${keyword.replace('.', '\\.').replace(' ', '\\s*')}\\b`, 'i');
     if (pattern.test(text)) {
-      info.education = value;
-      break;
+      const educationValue = educationMap[keyword];
+      console.log('Found education keyword:', keyword, '->', educationValue);
+      // If we haven't found any education yet, use this one
+      if (!highestLevelEducation) {
+        highestLevelEducation = educationValue;
+        console.log('Setting initial education level:', highestLevelEducation);
+      } 
+      // Otherwise, check if this is a higher level of education
+      else {
+        // Define education hierarchy
+        const educationHierarchy = {
+          'Class 10': 1,
+          'Class 12': 2,
+          'ITI': 3,
+          'Diploma': 4,
+          'Bachelor': 5,
+          'BCA': 5,
+          'BBA': 5,
+          'B.Com': 5,
+          'B.Sc': 5,
+          'BA': 5,
+          'B.E': 5,
+          'B.Tech': 5,
+          'B.Pharma': 5,
+          'Master': 6,
+          'MCA': 6,
+          'MBA': 6,
+          'M.Com': 6,
+          'M.Sc': 6,
+          'MA': 6,
+          'M.E': 6,
+          'M.Tech': 6
+        };
+        
+        // If this education is higher level than what we currently have, replace it
+        if ((educationHierarchy[educationValue] || 0) > (educationHierarchy[highestLevelEducation] || 0)) {
+          console.log('Upgrading education level from', highestLevelEducation, 'to', educationValue);
+          highestLevelEducation = educationValue;
+        }
+      }
     }
   }
   
+  info.education = highestLevelEducation;
+  console.log('Final education level:', info.education);
+  
+  console.log('Extraction complete. Results:', info);
   return info;
 }
 
@@ -202,15 +319,18 @@ function isValidName(name) {
   if (words.length > 4) return false; // Too many words for a name
   
   // Check that it doesn't contain common non-name words
-  const nonNameWords = ['resume', 'cv', 'curriculum', 'vitae', 'contact', 'information', 'details', 'name', 'address'];
+  const nonNameWords = ['resume', 'cv', 'curriculum', 'vitae', 'contact', 'information', 'details', 'name', 'address', 'phone', 'email', 'objective', 'summary'];
   const lowerName = name.toLowerCase();
   for (const word of nonNameWords) {
     if (lowerName.includes(word)) return false;
   }
   
-  // Check that it has reasonable capitalization pattern
-  // At least the first letter should be capitalized
-  if (name.charAt(0) !== name.charAt(0).toUpperCase()) return false;
+  // More permissive check for capitalization - just make sure it's not all lowercase
+  // Many PDFs don't preserve proper capitalization
+  if (name === name.toLowerCase()) {
+    // This is okay, we'll fix the capitalization in formatName
+    return true;
+  }
   
   return true;
 }
@@ -220,7 +340,28 @@ function formatName(name) {
   // Trim whitespace
   name = name.trim();
   
-  // Capitalize first letter of each word
+  // If the name is all lowercase, capitalize it properly
+  if (name === name.toLowerCase()) {
+    return name.split(/\s+/).map(word => {
+      // Handle hyphenated names
+      if (word.includes('-')) {
+        return word.split('-').map(part => 
+          part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+        ).join('-');
+      }
+      // Handle names with apostrophes (like O'Brien)
+      if (word.includes("'")) {
+        const parts = word.split("'");
+        return parts.map((part, index) => 
+          index === 0 ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part.toLowerCase()
+        ).join("'");
+      }
+      // Regular words
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }).join(' ');
+  }
+  
+  // Capitalize first letter of each word (existing logic)
   return name.split(/\s+/).map(word => {
     // Handle hyphenated names
     if (word.includes('-')) {
@@ -242,40 +383,110 @@ function formatName(name) {
 
 // Populate form fields with extracted information
 function populateFormFields(info) {
+  console.log('Populating form fields with info:', info);
+  
   // Populate name field
   if (info.name) {
     const nameField = document.getElementById('name');
-    if (!nameField.value) {
+    if (nameField && !nameField.value) {
       nameField.value = info.name;
+      console.log('Name field populated:', info.name);
+    } else if (nameField) {
+      console.log('Name field already has value or not found:', nameField.value);
     }
   }
   
   // Populate age field
   if (info.age) {
     const ageField = document.getElementById('age');
-    if (!ageField.value) {
+    if (ageField && !ageField.value) {
       ageField.value = info.age;
+      console.log('Age field populated:', info.age);
+    } else if (ageField) {
+      console.log('Age field already has value or not found:', ageField.value);
     }
   }
   
   // Populate skills field
   if (info.skills && info.skills.length > 0) {
     const skillsField = document.getElementById('skills');
-    const currentSkills = skillsField.value ? skillsField.value.split(',').map(s => s.trim()) : [];
-    const newSkills = [...new Set([...currentSkills, ...info.skills])];
-    skillsField.value = newSkills.join(', ');
+    if (skillsField) {
+      const currentSkills = skillsField.value ? skillsField.value.split(',').map(s => s.trim()) : [];
+      const newSkills = [...new Set([...currentSkills, ...info.skills])];
+      skillsField.value = newSkills.join(', ');
+      console.log('Skills field populated:', skillsField.value);
+    } else {
+      console.log('Skills field not found');
+    }
   }
   
   // Populate education field
   if (info.education) {
     const eduField = document.getElementById('eduMin');
-    const eduOptions = Array.from(eduField.options);
-    const matchedOption = eduOptions.find(option => 
-      option.text.toLowerCase().includes(info.education.toLowerCase())
-    );
-    
-    if (matchedOption) {
-      eduField.value = matchedOption.value;
+    if (eduField) {
+      console.log('Attempting to populate education field with:', info.education);
+      
+      // First try to find an exact match
+      const eduOptions = Array.from(eduField.options);
+      console.log('Available education options:', eduOptions.map(opt => opt.text));
+      
+      let matchedOption = eduOptions.find(option => 
+        option.text.toLowerCase() === info.education.toLowerCase()
+      );
+      
+      // If no exact match, try partial match
+      if (!matchedOption) {
+        matchedOption = eduOptions.find(option => 
+          option.text.toLowerCase().includes(info.education.toLowerCase())
+        );
+      }
+      
+      // If still no match, try to find the highest level of education in the options
+      if (!matchedOption) {
+        console.log('No direct match found, trying to find highest level match');
+        // Define education hierarchy for the available options
+        const optionHierarchy = {
+          'class 10': 1,
+          'iti': 2,
+          'diploma': 3,
+          'bca': 4,
+          'ba': 4,
+          'bba': 4,
+          'b.sc': 4,
+          'b.com': 4,
+          'b.pharma': 4
+        };
+        
+        // Find the highest matching education level
+        let highestLevel = 0;
+        let bestOption = null;
+        
+        for (const option of eduOptions) {
+          const optionText = option.text.toLowerCase();
+          const level = optionHierarchy[optionText] || 0;
+          if (level > highestLevel) {
+            highestLevel = level;
+            bestOption = option;
+          }
+        }
+        
+        matchedOption = bestOption;
+      }
+      
+      if (matchedOption) {
+        console.log('Matched education option:', matchedOption.text);
+        eduField.value = matchedOption.value;
+        console.log('Education field populated with value:', matchedOption.value);
+      } else {
+        // If no match found, try to set to a default value if the field is empty
+        console.log('No matching education option found');
+        if (!eduField.value) {
+          eduField.selectedIndex = 0; // Select the first option as default
+          console.log('Education field set to default option');
+        }
+      }
+    } else {
+      console.log('Education field not found');
     }
   }
 }

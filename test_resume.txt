@@ -1,0 +1,27 @@
+John Doe
+Software Developer
+
+Contact Information:
+Email: john.doe@example.com
+Phone: (555) 123-4567
+
+Summary:
+Experienced software developer with expertise in JavaScript, Python, and React.
+
+Skills:
+- JavaScript
+- Python
+- React
+- Node.js
+- HTML/CSS
+- SQL
+
+Education:
+Bachelor of Science in Computer Science
+University of Technology
+2016-2020
+
+Experience:
+Senior Developer
+Tech Solutions Inc.
+2020-Present
