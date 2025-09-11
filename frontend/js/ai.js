@@ -1368,6 +1368,7 @@ const translations = {
   en: {
     mainTitle: "AI-Based Recommendations Engine",
     subtitle: "For PM Internship Program",
+    formTitle: "Eligibility & Preferences Form",
     description: "Fill the criteria below and proceed to get personalized internship matches tailored to your profile.",
     resumeUploadTitle: "Resume Upload",
     resumeUploadDesc: "Upload your resume to automatically extract your information. (Optional)",
@@ -1410,6 +1411,7 @@ const translations = {
   hi: {
     mainTitle: "एआई-आधारित अनुशंसा इंजन",
     subtitle: "पीएम इंटर्नशिप कार्यक्रम के लिए",
+    formTitle: "पात्रता और प्राथमिकताएं फॉर्म",
     description: "अपनी प्रोफ़ाइल के अनुरूप व्यक्तिगत इंटर्नशिप मैच प्राप्त करने के लिए नीचे मानदंड भरें और आगे बढ़ें।",
     resumeUploadTitle: "रिज्यूमे अपलोड करें",
     resumeUploadDesc: "अपनी जानकारी स्वचालित रूप से निकालने के लिए अपना रिज्यूमे अपलोड करें। (वैकल्पिक)",
@@ -1452,6 +1454,7 @@ const translations = {
   bn: {
     mainTitle: "এআই-ভিত্তিক সুপারিশ ইঞ্জিন",
     subtitle: "পিএম ইন্টার্নশিপ প্রোগ্রামের জন্য",
+    formTitle: "যোগ্যতা এবং পছন্দ ফর্ম",
     description: "আপনার প্রোফাইলের জন্য ব্যক্তিগতভাবে মানানসই ইন্টার্নশিপ ম্যাচ পেতে নীচের মানদণ্ডগুলি পূরণ করুন এবং এগিয়ে যান।",
     resumeUploadTitle: "রেজুমে আপলোড করুন",
     resumeUploadDesc: "স্বয়ংক্রিয়ভাবে আপনার তথ্য নিষ্কাশন করতে আপনার রেজুমে আপলোড করুন। (ঐচ্ছিক)",
@@ -1513,7 +1516,7 @@ async function switchLanguage(lang) {
   
   // Get all translatable elements
   const translatableElements = [
-    'mainTitle', 'subtitle', 'description', 'resumeUploadTitle', 'resumeUploadDesc',
+    'mainTitle', 'subtitle','formTitle', 'description', 'resumeUploadTitle', 'resumeUploadDesc',
     'uploadLabel', 'extractInfo', 'personalInfoTitle', 'nameLabel', 'citizenshipLabel',
     'ageLabel', 'educationLabel', 'preferencesTitle', 'skillsLabel', 'domainLabel',
     'locationLabel', 'durationLabel', 'enrollmentTitle', 'currentStatusLabel',
